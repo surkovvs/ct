@@ -8,10 +8,10 @@ import (
 	"github.com/surkovvs/ct/internal/tools"
 )
 
-var (
-	setLogger         = &sync.Once{}
-	debugTitle string = "sarama_event"
-)
+//nolint:gochecknoglobals // i'll prefer to do it once
+var setLogger = &sync.Once{}
+
+const debugTitle string = "sarama_event"
 
 type debugLogger interface {
 	Debug(msg string, args ...any)
@@ -19,39 +19,45 @@ type debugLogger interface {
 
 func InitSaramaLogger(title string, log debugLogger) {
 	setLogger.Do(func() {
+		adapter := saramaLogAdapter{}
 		if title != "" {
-			debugTitle = title
+			adapter.debugTitle = title
+		} else {
+			adapter.debugTitle = debugTitle
 		}
+
 		if log == nil {
 			log = tools.NewDefaultLogger()
 		}
-		sarama.Logger = saramaLogAdapter{
-			log: log,
-		}
+		adapter.log = log
+
+		//nolint: reassign // as sarama says
+		sarama.Logger = adapter
 	})
 }
 
 type saramaLogAdapter struct {
-	log debugLogger
+	debugTitle string
+	log        debugLogger
 }
 
 func (sla saramaLogAdapter) Print(v ...interface{}) {
 	sla.log.Debug(
-		debugTitle,
+		sla.debugTitle,
 		"message", fmt.Sprint(v...),
 	)
 }
 
 func (sla saramaLogAdapter) Printf(format string, v ...interface{}) {
 	sla.log.Debug(
-		debugTitle,
+		sla.debugTitle,
 		"message", fmt.Sprintf(format, v...),
 	)
 }
 
 func (sla saramaLogAdapter) Println(v ...interface{}) {
 	sla.log.Debug(
-		debugTitle,
+		sla.debugTitle,
 		"message", fmt.Sprint(v...),
 	)
 }

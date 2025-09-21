@@ -9,12 +9,10 @@ import (
 	"github.com/surkovvs/ct/internal/tools"
 )
 
-type (
-	Pool struct {
-		Cfg  *pgxpool.Config
-		pgxp *pgxpool.Pool
-	}
-)
+type Pool struct {
+	Cfg  *pgxpool.Config
+	pgxp *pgxpool.Pool
+}
 
 func New(cfg ctifaces.SQLConfigurator) (*Pool, error) {
 	pgxpCfg, err := pgxpool.ParseConfig(cfg.GetDSN())
@@ -45,18 +43,21 @@ func New(cfg ctifaces.SQLConfigurator) (*Pool, error) {
 	}, nil
 }
 
+func (pool *Pool) GetPool() *pgxpool.Pool {
+	return pool.pgxp
+}
+
 func (pool *Pool) Init(ctx context.Context) error {
 	var err error
 	pool.pgxp, err = pgxpool.NewWithConfig(ctx, pool.Cfg)
 	if err != nil {
-		return err
+		return fmt.Errorf("new pgx pool: %w", err)
 	}
 	err = pool.pgxp.Ping(ctx)
-	return err
-}
-
-func (pool *Pool) GetPool() *pgxpool.Pool {
-	return pool.pgxp
+	if err != nil {
+		return fmt.Errorf("pgx pool ping: %w", err)
+	}
+	return nil
 }
 
 func (pool *Pool) Shutdown(_ context.Context) error {
@@ -65,7 +66,7 @@ func (pool *Pool) Shutdown(_ context.Context) error {
 }
 
 func (pool *Pool) GetModuleNamePrefix() string {
-	return "sql_pool"
+	return "sql_pgxp"
 }
 
 func (pool *Pool) PreidentifyModuleGroup() string {

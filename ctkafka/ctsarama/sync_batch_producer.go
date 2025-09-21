@@ -10,8 +10,8 @@ import (
 )
 
 var (
-	ProducerIsClosed = errors.New("producer is closed")
-	ProducerDisabled = errors.New("producer disabled")
+	ErrProducerIsClosed = errors.New("producer is closed")
+	ErrProducerDisabled = errors.New("producer disabled")
 )
 
 type SyncBatchProducer[T any] struct {
@@ -40,7 +40,7 @@ type BatchProducerParameters[T any] struct {
 }
 
 func NewSyncBatchProducer[T any](params BatchProducerParameters[T],
-	opts ...cfgOpt,
+	opts ...CfgOpt,
 ) (*SyncBatchProducer[T], error) {
 	if params.Config.LogKafkaEvents() {
 		InitSaramaLogger(params.Config.GetEventsLogTitle(), params.Config.GetLogger())
@@ -81,7 +81,7 @@ func NewSyncBatchProducer[T any](params BatchProducerParameters[T],
 	}, nil
 }
 
-func defaultProducerCfgApply() cfgOpt {
+func defaultProducerCfgApply() CfgOpt {
 	return func(c *sarama.Config) {
 		c.Producer.Idempotent = true
 		c.Producer.Return.Errors = true
@@ -139,7 +139,7 @@ LoopLable:
 	return nil
 }
 
-func (p *SyncBatchProducer[T]) Shutdown(ctx context.Context) error {
+func (p *SyncBatchProducer[T]) Shutdown(_ context.Context) error {
 	if err := p.syncProducer.Close(); err != nil {
 		return fmt.Errorf("close sync producer: %w", err)
 	}
@@ -164,7 +164,7 @@ func (p *SyncBatchProducer[T]) batchEncode(objs []T) ([]*sarama.ProducerMessage,
 
 func (p *SyncBatchProducer[T]) SendBatch(objs []T) error {
 	if !p.enabled {
-		return ProducerDisabled
+		return ErrProducerDisabled
 	}
 
 	batch, err := p.batchEncode(objs)
@@ -175,7 +175,7 @@ func (p *SyncBatchProducer[T]) SendBatch(objs []T) error {
 	<-p.running
 	select {
 	case <-p.closed:
-		return ProducerIsClosed
+		return ErrProducerIsClosed
 	default:
 		p.sendChan <- batch
 		if err := <-p.errChan; err != nil {

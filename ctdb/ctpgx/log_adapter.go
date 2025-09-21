@@ -5,28 +5,6 @@ import (
 	"github.com/surkovvs/ct/ctifaces"
 )
 
-// TODO: implement methods
-func New(cfg ctifaces.SQLConfigurator) (*pgx.ConnPool, error) {
-	connCfg, err := pgx.ParseConnectionString(cfg.GetDSN())
-	if err != nil {
-		return nil, err
-	}
-
-	logger := cfg.GetLogger()
-	if logger != nil {
-		connCfg.LogLevel = 6
-		connCfg.Logger = logAdapter{logger}
-	}
-
-	pool, err := pgx.NewConnPool(pgx.ConnPoolConfig{
-		ConnConfig: connCfg,
-	})
-	if err != nil {
-		return nil, err
-	}
-	return pool, nil
-}
-
 type logAdapter struct {
 	ctifaces.Logger
 }

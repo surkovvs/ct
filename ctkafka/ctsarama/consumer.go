@@ -11,7 +11,7 @@ import (
 	"github.com/surkovvs/ct/internal/tools"
 )
 
-var fetchBytes int32 = 64 << 10 // 64 * 1024
+const fetchBytes int32 = 64 << 10 // 64 * 1024
 
 func DecodeStub(_, v []byte) ([]byte, error) {
 	return v, nil
@@ -28,14 +28,15 @@ type BatchConsumer[T any] struct {
 	handler batchHandler[T]
 }
 
-func (handler batchHandler[T]) Setup(session sarama.ConsumerGroupSession) error {
+func (handler batchHandler[T]) Setup(_ sarama.ConsumerGroupSession) error {
 	return nil
 }
 
-func (handler batchHandler[T]) Cleanup(session sarama.ConsumerGroupSession) error {
+func (handler batchHandler[T]) Cleanup(_ sarama.ConsumerGroupSession) error {
 	return nil
 }
 
+//nolint:gocognit // 26, it's ok
 func (handler batchHandler[T]) ConsumeClaim(session sarama.ConsumerGroupSession,
 	claim sarama.ConsumerGroupClaim,
 ) error {
@@ -82,7 +83,11 @@ func (handler batchHandler[T]) ConsumeClaim(session sarama.ConsumerGroupSession,
 			session.Commit()
 
 		case <-session.Context().Done():
-			return session.Context().Err()
+			err := session.Context().Err()
+			if err != nil {
+				return fmt.Errorf("session context: %w", err)
+			}
+			return nil
 		}
 	}
 }
@@ -92,16 +97,18 @@ func (handler *batchHandler[T]) flushBatch(ctx context.Context, rawBatch []*sara
 	for _, msg := range rawBatch {
 		decoded, err := handler.decodeFunc(msg.Key, msg.Value)
 		if err != nil {
-			if err := handler.decodeErrHandle(msg, err); err != nil {
-				return err
+			handledErr := handler.decodeErrHandle(msg, err)
+			if handledErr != nil {
+				return handledErr
 			}
 		}
 		batch = append(batch, decoded)
 	}
 
 	if err := handler.processFunc(ctx, batch); err != nil {
-		if err := handler.processErrHandle(rawBatch, err); err != nil {
-			return err
+		handledErr := handler.processErrHandle(rawBatch, err)
+		if handledErr != nil {
+			return handledErr
 		}
 	}
 	return nil
@@ -134,7 +141,7 @@ type BatchConsumerParameters[T any] struct {
 	ProcessErrHandle ProcessErrHandle
 }
 
-func NewBatchConsumer[T any](params BatchConsumerParameters[T], opts ...cfgOpt) (*BatchConsumer[T], error) {
+func NewBatchConsumer[T any](params BatchConsumerParameters[T], opts ...CfgOpt) (*BatchConsumer[T], error) {
 	if params.Config.LogKafkaEvents() {
 		InitSaramaLogger(params.Config.GetEventsLogTitle(), params.Config.GetLogger())
 	}
@@ -214,7 +221,11 @@ func (cons *BatchConsumer[T]) Run(ctx context.Context) error {
 		}
 	}()
 
-	return cons.consumerGroup.Consume(ctx, []string{cons.topic}, cons.handler)
+	err = cons.consumerGroup.Consume(ctx, []string{cons.topic}, cons.handler)
+	if err != nil {
+		return fmt.Errorf("consumer group consume: %w", err)
+	}
+	return nil
 }
 
 func (cons *BatchConsumer[T]) setDefaultErrHanldeFunc() {
@@ -244,13 +255,16 @@ func (cons *BatchConsumer[T]) setDefaultErrHanldeFunc() {
 	}
 }
 
-func (cons *BatchConsumer[T]) Shutdown(ctx context.Context) error {
+func (cons *BatchConsumer[T]) Shutdown(_ context.Context) error {
 	if cons.consumerGroup != nil {
-		return cons.consumerGroup.Close()
+		err := cons.consumerGroup.Close()
+		if err != nil {
+			return fmt.Errorf("consumer group close: %w", err)
+		}
 	}
 	return nil
 }
 
-func (p *BatchConsumer[T]) GetModuleNamePrefix() string {
+func (cons *BatchConsumer[T]) GetModuleNamePrefix() string {
 	return "kafka_batch_consumer"
 }

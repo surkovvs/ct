@@ -45,15 +45,15 @@ func newClientConfigDefault(cfg ctifaces.KafkaClientConfigurator) (*sarama.Confi
 	return sConfig, nil
 }
 
-type cfgOpt func(*sarama.Config)
+type CfgOpt func(*sarama.Config)
 
-func WithSCRAMClient(genFunc func() sarama.SCRAMClient) cfgOpt {
+func WithSCRAMClient(genFunc func() sarama.SCRAMClient) CfgOpt {
 	return func(c *sarama.Config) {
 		c.Net.SASL.SCRAMClientGeneratorFunc = genFunc
 	}
 }
 
-func WithPartitioner(partitioner sarama.PartitionerConstructor) cfgOpt {
+func WithPartitioner(partitioner sarama.PartitionerConstructor) CfgOpt {
 	return func(c *sarama.Config) {
 		c.Producer.Partitioner = partitioner
 	}

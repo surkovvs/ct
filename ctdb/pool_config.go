@@ -1,4 +1,4 @@
-package ctsql
+package ctdb
 
 import (
 	"time"

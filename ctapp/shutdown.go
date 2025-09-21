@@ -19,9 +19,10 @@ func (a *App) gracefulShutdown() {
 	}()
 
 	c := vector.NewConstructor(a.execution.reports)
-	var vectors []any
+	shutdowners := a.storage.GetUnsortedShutdowners()
+	vectors := make([]any, 0, len(shutdowners))
 	wg := sync.WaitGroup{}
-	for _, module := range a.storage.GetUnsortedShutdowners() {
+	for _, module := range shutdowners {
 		wg.Add(1)
 		vectors = append(vectors, c.WithReleaseWG(&wg, module.ForseShutdown))
 	}
@@ -88,7 +89,7 @@ func (a *App) reportUnfinished() {
 }
 
 func modulesByGroupsToString(m map[string][]string) string {
-	var byGroups []string
+	byGroups := make([]string, 0, len(m))
 	for group, modules := range m {
 		byGroups = append(byGroups, "group '"+group+"': "+strings.Join(modules, ", "))
 	}

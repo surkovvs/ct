@@ -57,7 +57,7 @@ func (tracer tracer) TraceBatchQuery(_ context.Context, conn *pgx5.Conn, d pgx5.
 		"error", d.Err)
 }
 
-func (tracer tracer) TraceBatchEnd(ctx context.Context, conn *pgx5.Conn, ed pgx5.TraceBatchEndData) {
+func (tracer tracer) TraceBatchEnd(_ context.Context, conn *pgx5.Conn, ed pgx5.TraceBatchEndData) {
 	tracer.Debug(
 		"batch_query_end",
 		"local_addr", conn.PgConn().Conn().LocalAddr().String(),
@@ -77,7 +77,7 @@ func (tracer tracer) TraceCopyFromStart(ctx context.Context,
 	return ctx
 }
 
-func (tracer tracer) TraceCopyFromEnd(ctx context.Context, conn *pgx5.Conn, ed pgx5.TraceCopyFromEndData) {
+func (tracer tracer) TraceCopyFromEnd(_ context.Context, conn *pgx5.Conn, ed pgx5.TraceCopyFromEndData) {
 	tracer.Debug(
 		"copy_from_end",
 		"local_addr", conn.PgConn().Conn().LocalAddr().String(),
@@ -98,7 +98,7 @@ func (tracer tracer) TracePrepareStart(ctx context.Context,
 	return ctx
 }
 
-func (tracer tracer) TracePrepareEnd(ctx context.Context, conn *pgx5.Conn, ed pgx5.TracePrepareEndData) {
+func (tracer tracer) TracePrepareEnd(_ context.Context, conn *pgx5.Conn, ed pgx5.TracePrepareEndData) {
 	tracer.Debug(
 		"prepare_end",
 		"local_addr", conn.PgConn().Conn().LocalAddr().String(),
@@ -114,7 +114,7 @@ func (tracer tracer) TraceConnectStart(ctx context.Context, data pgx5.TraceConne
 	return ctx
 }
 
-func (tracer tracer) TraceConnectEnd(ctx context.Context, data pgx5.TraceConnectEndData) {
+func (tracer tracer) TraceConnectEnd(_ context.Context, data pgx5.TraceConnectEndData) {
 	tracer.Info(
 		"conn_end",
 		"local_addr", data.Conn.PgConn().Conn().LocalAddr().String(),

@@ -97,8 +97,9 @@ func (a *App) processBackgroundSync() {
 
 func (a *App) processSequentialGroups() {
 	c := vector.NewConstructor(a.execution.reports)
-	var vectors []any
-	for _, group := range a.storage.GetOrderedGroupList() {
+	groupList := a.storage.GetOrderedGroupList()
+	vectors := make([]any, 0, len(groupList))
+	for _, group := range groupList {
 		if group.GetName() == BackgroundGroup || group.GetName() == BackgroundSyncGroup {
 			continue
 		}

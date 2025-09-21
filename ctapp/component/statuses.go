@@ -19,6 +19,7 @@ const (
 	FailedString    = "failed"
 )
 
+//nolint:gochecknoglobals // skip
 var namedStatuses = map[uint64]string{
 	1: ReadyString,
 	2: InProcessString,

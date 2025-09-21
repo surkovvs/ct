@@ -58,8 +58,12 @@ func DefineComponent(d Define) Comp {
 		object:    d.Component,
 		status:    status,
 		groupName: d.GroupName,
-		hc:        &hcDynamic{mu: &sync.Mutex{}},
-		sdWgFlag:  new(uint32),
+		hc: &hcDynamic{
+			mu:           &sync.Mutex{},
+			hcProcessing: nil,
+			hcErr:        nil,
+		},
+		sdWgFlag: new(uint32),
 	}
 }
 
@@ -105,8 +109,11 @@ func (c Comp) IsHealthchecker() bool {
 
 func (c Comp) genReport() Report {
 	return Report{
-		group:  c.groupName,
-		module: c.name,
+		group:   c.groupName,
+		module:  c.name,
+		Err:     nil,
+		message: "",
+		Code:    0,
 	}
 }
 
@@ -138,124 +145,124 @@ func (c Comp) healthchecker() statusProvider {
 	}
 }
 
-func (r Comp) Init(ctx context.Context) Report {
-	rep := r.genReport()
+func (c Comp) Init(ctx context.Context) Report {
+	rep := c.genReport()
 	switch {
-	case !r.IsInitializer():
+	case !c.IsInitializer():
 		rep.Code = CodeInfo
 		rep.message = "no init method, skip"
 		return rep
-	case !r.initializer().isReady():
+	case !c.initializer().isReady():
 		rep.Code = CodeError
-		rep.message = fmt.Sprintf("invalid status to start init (current status '%s')", r.initializer().namedStatus())
+		rep.message = fmt.Sprintf("invalid status to start init (current status '%s')", c.initializer().namedStatus())
 		rep.Err = ErrIncorrectStatusForAction
 		return rep
 	case ctx.Err() != nil:
-		defer r.execWg.Done()
+		defer c.execWg.Done()
 		rep.Code = CodeError
 		rep.message = "context canceled for init, skip"
 		rep.Err = ctx.Err()
 		return rep
 	}
 
-	initializer, ok := r.object.(ctifaces.Initializer)
+	initializer, ok := c.object.(ctifaces.Initializer)
 	if !ok {
-		panic(fmt.Sprintf(`group '%s', module '%s', incorrectly defined as Initializer`, r.groupName, r.name))
+		panic(fmt.Sprintf(`group '%s', module '%s', incorrectly defined as Initializer`, c.groupName, c.name))
 	}
 
-	r.initializer().setInProcess()
-	defer r.execWg.Done()
+	c.initializer().setInProcess()
+	defer c.execWg.Done()
 	if err := initializer.Init(ctx); err != nil {
-		r.initializer().setFailed()
+		c.initializer().setFailed()
 		rep.Code = CodeError
 		rep.message = "init error"
 		rep.Err = err
 		return rep
 	}
-	r.initializer().setDone()
+	c.initializer().setDone()
 	return rep
 }
 
-func (r Comp) Run(ctx context.Context) Report {
-	rep := r.genReport()
+func (c Comp) Run(ctx context.Context) Report {
+	rep := c.genReport()
 	switch {
-	case !r.IsRunner():
+	case !c.IsRunner():
 		rep.Code = CodeInfo
 		rep.message = "no run method, skip"
 		return rep
-	case !r.runner().isReady():
+	case !c.runner().isReady():
 		rep.Code = CodeError
-		rep.message = fmt.Sprintf("invalid status to start run (current status '%s')", r.runner().namedStatus())
+		rep.message = fmt.Sprintf("invalid status to start run (current status '%s')", c.runner().namedStatus())
 		rep.Err = ErrIncorrectStatusForAction
 		return rep
-	case r.IsInitializer() && !r.initializer().isDone():
+	case c.IsInitializer() && !c.initializer().isDone():
 		rep.Code = CodeError
-		rep.message = fmt.Sprintf("trying to start run with init status '%s'", r.initializer().namedStatus())
+		rep.message = fmt.Sprintf("trying to start run with init status '%s'", c.initializer().namedStatus())
 		rep.Err = ErrIncorrectStatusForAction
 		return rep
 	case ctx.Err() != nil:
-		defer r.execWg.Done()
+		defer c.execWg.Done()
 		rep.Code = CodeError
 		rep.message = "context canceled for run, skip"
 		rep.Err = ctx.Err()
 		return rep
 	}
 
-	runner, ok := r.object.(ctifaces.Runner)
+	runner, ok := c.object.(ctifaces.Runner)
 	if !ok {
-		panic(fmt.Sprintf(`group '%s', module '%s', incorrectly defined as Runner`, r.groupName, r.name))
+		panic(fmt.Sprintf(`group '%s', module '%s', incorrectly defined as Runner`, c.groupName, c.name))
 	}
 
-	r.runner().setInProcess()
-	defer r.execWg.Done()
+	c.runner().setInProcess()
+	defer c.execWg.Done()
 	if err := runner.Run(ctx); err != nil {
-		r.runner().setFailed()
+		c.runner().setFailed()
 		rep.Code = CodeError
 		rep.message = "run error"
 		rep.Err = err
 		return rep
 	}
-	r.runner().setDone()
+	c.runner().setDone()
 	return rep
 }
 
-func (r Comp) Shutdown(ctx context.Context) Report {
-	rep := r.genReport()
+func (c Comp) Shutdown(ctx context.Context) Report {
+	rep := c.genReport()
 	switch {
-	case !r.IsShutdowner():
+	case !c.IsShutdowner():
 		rep.Code = CodeInfo
 		rep.message = "no shutdown method, skip"
 		return rep
-	case !r.IsRunner():
+	case !c.IsRunner():
 		defer func() {
-			if atomic.CompareAndSwapUint32(r.sdWgFlag, 0, 1) {
-				r.execWg.Done()
+			if atomic.CompareAndSwapUint32(c.sdWgFlag, 0, 1) {
+				c.execWg.Done()
 			}
 		}()
 		rep.Code = CodeInfo
 		rep.message = "no run method, shutdown delayed"
 		return rep
 	}
-	return r.ForseShutdown(ctx)
+	return c.ForseShutdown(ctx)
 }
 
 // ForseShutdown - starts regardless of the runner's status.
-func (r Comp) ForseShutdown(ctx context.Context) Report {
-	rep := r.genReport()
+func (c Comp) ForseShutdown(ctx context.Context) Report {
+	rep := c.genReport()
 	switch {
-	case !r.IsShutdowner():
+	case !c.IsShutdowner():
 		rep.Code = CodeInfo
 		rep.message = "no shutdown method, skip"
 		return rep
-	case r.shutdowner().isDone() || r.shutdowner().isFailed() || r.shutdowner().isInProcess():
+	case c.shutdowner().isDone() || c.shutdowner().isFailed() || c.shutdowner().isInProcess():
 		rep.Code = CodeGSDrecall
 		rep.message = fmt.Sprintf("re-calling a shutdown method (current status '%s'), skip",
-			r.shutdowner().namedStatus())
+			c.shutdowner().namedStatus())
 		return rep
 	case ctx.Err() != nil:
 		defer func() {
-			if atomic.CompareAndSwapUint32(r.sdWgFlag, 0, 1) {
-				r.execWg.Done()
+			if atomic.CompareAndSwapUint32(c.sdWgFlag, 0, 1) {
+				c.execWg.Done()
 			}
 		}()
 		rep.Code = CodeError
@@ -264,62 +271,62 @@ func (r Comp) ForseShutdown(ctx context.Context) Report {
 		return rep
 	}
 
-	shutdowner, ok := r.object.(ctifaces.Shutdowner)
+	shutdowner, ok := c.object.(ctifaces.Shutdowner)
 	if !ok {
-		panic(fmt.Sprintf(`group '%s', module '%s', incorrectly defined as Shutdowner`, r.groupName, r.name))
+		panic(fmt.Sprintf(`group '%s', module '%s', incorrectly defined as Shutdowner`, c.groupName, c.name))
 	}
 
-	r.shutdowner().setInProcess()
+	c.shutdowner().setInProcess()
 	defer func() {
-		if atomic.CompareAndSwapUint32(r.sdWgFlag, 0, 1) {
-			r.execWg.Done()
+		if atomic.CompareAndSwapUint32(c.sdWgFlag, 0, 1) {
+			c.execWg.Done()
 		}
 	}()
 	if err := shutdowner.Shutdown(ctx); err != nil {
-		r.shutdowner().setFailed()
+		c.shutdowner().setFailed()
 		rep.Code = CodeError
 		rep.message = "shutdown error"
 		rep.Err = err
 		return rep
 	}
-	r.shutdowner().setDone()
+	c.shutdowner().setDone()
 	return rep
 }
 
-func (r Comp) Healthcheck(ctx context.Context) Report {
-	rep := r.genReport()
-	if !r.healthchecker().isInProcess() {
-		r.hc.mu.Lock()
-		defer r.hc.mu.Unlock()
+func (c Comp) Healthcheck(ctx context.Context) Report {
+	rep := c.genReport()
+	if !c.healthchecker().isInProcess() {
+		c.hc.mu.Lock()
+		defer c.hc.mu.Unlock()
 
-		r.hc.hcProcessing = make(chan struct{})
-		defer close(r.hc.hcProcessing)
+		c.hc.hcProcessing = make(chan struct{})
+		defer close(c.hc.hcProcessing)
 
-		r.healthchecker().setInProcess()
+		c.healthchecker().setInProcess()
 
-		healthchecker, ok := r.object.(ctifaces.Healthchecker)
+		healthchecker, ok := c.object.(ctifaces.Healthchecker)
 		if !ok {
-			panic(fmt.Sprintf(`group '%s', module '%s', incorrectly defined as Healthchecker`, r.groupName, r.name))
+			panic(fmt.Sprintf(`group '%s', module '%s', incorrectly defined as Healthchecker`, c.groupName, c.name))
 		}
 
 		if err := healthchecker.Healthcheck(ctx); err != nil {
-			r.healthchecker().setFailed()
-			r.hc.hcErr = err
+			c.healthchecker().setFailed()
+			c.hc.hcErr = err
 
 			rep.Code = CodeError
 			rep.message = "healthcheck error"
 			rep.Err = err
 			return rep
 		}
-		r.healthchecker().setDone()
+		c.healthchecker().setDone()
 		return rep
 	}
 
-	<-r.hc.hcProcessing
-	if r.hc.hcErr != nil {
+	<-c.hc.hcProcessing
+	if c.hc.hcErr != nil {
 		rep.Code = CodeError
 		rep.message = "healthcheck error"
-		rep.Err = r.hc.hcErr
+		rep.Err = c.hc.hcErr
 	}
 	return rep
 }

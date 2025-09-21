@@ -57,8 +57,11 @@ func New(opts ...AppOption) *App {
 			wg:            &sync.WaitGroup{},
 			done:          make(chan struct{}),
 			reports:       make(chan component.Report),
+			initCtx:       nil,
+			runCtx:        nil,
 			initRunCancel: nil,
 			initTimeout:   nil,
+			tolerantMode:  false,
 		},
 		shutdown: shutdown{
 			ctx:          sdCtx,

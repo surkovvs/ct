@@ -37,10 +37,7 @@ func (c ClientConfig) GetCertPath() *string {
 }
 
 func (c ClientConfig) AuthNeeded() bool {
-	if c.Auth != nil {
-		return true
-	}
-	return false
+	return c.Auth != nil
 }
 
 func (c ClientConfig) GetUserName() string {
