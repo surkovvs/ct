@@ -2,9 +2,9 @@ package ctkafka
 
 import "github.com/surkovvs/ct/ctifaces"
 
-var _ ctifaces.KafkaConfigurator = (*ConfigKafka)(nil)
+var _ ctifaces.KafkaConfigurator = (*Config)(nil)
 
-type ConfigKafka struct {
+type Config struct {
 	LogEnable bool
 	LogTitle  string
 	Logger    ctifaces.Logger
@@ -14,24 +14,24 @@ type ConfigKafka struct {
 	Consumers map[string]ConsumerConfig `mapstructure:"Consumers"`
 }
 
-func (cfg ConfigKafka) WithLogger(log ctifaces.Logger) ConfigKafka {
+func (cfg Config) WithLogger(log ctifaces.Logger) Config {
 	cfg.Logger = log
 	return cfg
 }
 
-func (cfg ConfigKafka) GetLogger() ctifaces.Logger {
+func (cfg Config) GetLogger() ctifaces.Logger {
 	return cfg.Logger
 }
 
-func (cfg ConfigKafka) LogKafkaEvents() bool {
+func (cfg Config) LogKafkaEvents() bool {
 	return cfg.LogEnable
 }
 
-func (cfg ConfigKafka) GetEventsLogTitle() string {
+func (cfg Config) GetEventsLogTitle() string {
 	return cfg.LogTitle
 }
 
-func (cfg ConfigKafka) GetKafkaCLients() map[string]ctifaces.KafkaClientConfigurator {
+func (cfg Config) GetKafkaCLients() map[string]ctifaces.KafkaClientConfigurator {
 	res := make(map[string]ctifaces.KafkaClientConfigurator, len(cfg.Clients))
 	for k, v := range cfg.Clients {
 		res[k] = v
@@ -39,7 +39,7 @@ func (cfg ConfigKafka) GetKafkaCLients() map[string]ctifaces.KafkaClientConfigur
 	return res
 }
 
-func (cfg ConfigKafka) GetKafkaProducers() map[string]ctifaces.KafkaProducerConfigurator {
+func (cfg Config) GetKafkaProducers() map[string]ctifaces.KafkaProducerConfigurator {
 	res := make(map[string]ctifaces.KafkaProducerConfigurator, len(cfg.Clients))
 	for k, v := range cfg.Producers {
 		res[k] = v
@@ -47,7 +47,7 @@ func (cfg ConfigKafka) GetKafkaProducers() map[string]ctifaces.KafkaProducerConf
 	return res
 }
 
-func (cfg ConfigKafka) GetKafkaConsumers() map[string]ctifaces.KafkaConsumerConfigurator {
+func (cfg Config) GetKafkaConsumers() map[string]ctifaces.KafkaConsumerConfigurator {
 	res := make(map[string]ctifaces.KafkaConsumerConfigurator, len(cfg.Clients))
 	for k, v := range cfg.Consumers {
 		res[k] = v

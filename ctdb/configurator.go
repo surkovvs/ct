@@ -7,9 +7,9 @@ import (
 	"github.com/surkovvs/ct/ctifaces"
 )
 
-var _ ctifaces.SQLConfigurator = SQLConfig{}
+var _ ctifaces.SQLConfigurator = (*Config)(nil)
 
-type SQLConfig struct {
+type Config struct {
 	ctifaces.Logger `mapstructure:"-"`
 	// prefer DSN for coonection
 	DSN        string
@@ -26,7 +26,7 @@ type SQLConfig struct {
 }
 
 // TODO: add TLS
-func (cfg SQLConfig) GetDSN() string {
+func (cfg Config) GetDSN() string {
 	if cfg.DSN != "" {
 		return cfg.DSN
 	}
@@ -39,23 +39,23 @@ func (cfg SQLConfig) GetDSN() string {
 	)
 }
 
-func (cfg SQLConfig) GetLogger() ctifaces.Logger {
+func (cfg Config) GetLogger() ctifaces.Logger {
 	return cfg.Logger
 }
 
-func (cfg SQLConfig) WithLogger(log ctifaces.Logger) SQLConfig {
+func (cfg Config) WithLogger(log ctifaces.Logger) Config {
 	cfg.Logger = log
 	return cfg
 }
 
-func (cfg SQLConfig) LogQueriesEnabled() bool {
+func (cfg Config) LogQueriesEnabled() bool {
 	return cfg.LogQueries
 }
 
-func (cfg SQLConfig) GetPGPoolConfig() ctifaces.PGPoolConfigurator {
+func (cfg Config) GetPGPoolConfig() ctifaces.PGPoolConfigurator {
 	return cfg.PGPoolConfig
 }
 
-func (cfg SQLConfig) GetTLS() *tls.Config {
+func (cfg Config) GetTLS() *tls.Config {
 	return cfg.TLS
 }

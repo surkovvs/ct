@@ -6,7 +6,7 @@ import (
 	"github.com/surkovvs/ct/ctifaces"
 )
 
-var _ ctifaces.PGPoolConfigurator = PGPoolConfig{}
+var _ ctifaces.PGPoolConfigurator = (*PGPoolConfig)(nil)
 
 type PGPoolConfig struct {
 	LogConnectOperations  bool

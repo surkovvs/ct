@@ -7,7 +7,9 @@ import (
 	"github.com/surkovvs/ct/ctifaces"
 )
 
-type ConfigApp struct {
+var _ ctifaces.AppConfigurator = (*Config)(nil)
+
+type Config struct {
 	Silient         bool
 	TolerantMode    bool
 	Name            *string
@@ -15,23 +17,23 @@ type ConfigApp struct {
 	ShutdownTimeout *time.Duration
 }
 
-func (c ConfigApp) IsAppSilientMode() bool {
+func (c Config) IsAppSilientMode() bool {
 	return c.Silient
 }
 
-func (c ConfigApp) IsAppTolerantMode() bool {
+func (c Config) IsAppTolerantMode() bool {
 	return c.TolerantMode
 }
 
-func (c ConfigApp) GetApplicationName() *string {
+func (c Config) GetApplicationName() *string {
 	return c.Name
 }
 
-func (c ConfigApp) GetAppInitTimeout() *time.Duration {
+func (c Config) GetAppInitTimeout() *time.Duration {
 	return c.InitTimeout
 }
 
-func (c ConfigApp) GetAppShutdownTimeout() *time.Duration {
+func (c Config) GetAppShutdownTimeout() *time.Duration {
 	return c.ShutdownTimeout
 }
 

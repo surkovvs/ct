@@ -21,7 +21,7 @@ func main() {
 	// log.SetOutput(io.Discard)
 
 	app := ctapp.New(
-		ctapp.WithConfig(ctapp.ConfigApp{
+		ctapp.WithConfig(ctapp.Config{
 			Silient: false,
 			// TolerantMode:    false,
 			TolerantMode:    true,

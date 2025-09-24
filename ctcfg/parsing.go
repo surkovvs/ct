@@ -33,3 +33,11 @@ func ParseFile[T any](filepath *string) (*T, error) {
 
 	return &cfg, nil
 }
+
+func MustParseFile[T any](filepath *string) *T {
+	cfg, err := ParseFile[T](filepath)
+	if err != nil {
+		panic(fmt.Errorf("parse file: %w", err))
+	}
+	return cfg
+}

@@ -26,7 +26,7 @@ func main() {
 	log.SetFlags(log.Lmicroseconds)
 
 	app := ctapp.New(
-		ctapp.WithConfig(ctapp.ConfigApp{
+		ctapp.WithConfig(ctapp.Config{
 			Silient:         false,
 			TolerantMode:    true,
 			Name:            &appName,

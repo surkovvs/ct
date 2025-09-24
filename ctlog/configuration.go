@@ -5,7 +5,7 @@ import (
 	"strings"
 )
 
-type ConfigLog struct {
+type Config struct {
 	Level   any
 	Develop bool // if not - json encoder will be used
 	Colored bool
@@ -20,7 +20,7 @@ const (
 	LevelErrorStr string = "error"
 )
 
-func (c ConfigLog) GetLogLvl() slog.Level {
+func (c Config) GetLogLvl() slog.Level {
 	switch toParse := c.Level.(type) {
 	case slog.Level:
 		return slog.LevelDebug // TODO: try it out
@@ -39,10 +39,10 @@ func (c ConfigLog) GetLogLvl() slog.Level {
 	return 0
 }
 
-func (c ConfigLog) IsLogDevMode() bool {
+func (c Config) IsLogDevMode() bool {
 	return c.Develop
 }
 
-func (c ConfigLog) IsLogColored() bool {
+func (c Config) IsLogColored() bool {
 	return c.Colored
 }
