@@ -9,7 +9,10 @@ import (
 	"go.uber.org/zap/zapcore"
 )
 
-var _ ctifaces.Logger = (*ZapAdapter)(nil)
+var (
+	_ ctifaces.Logger         = (*ZapAdapter)(nil)
+	_ ctifaces.NameableLogger = (*ZapAdapter)(nil)
+)
 
 type ZapAdapter struct {
 	sl *zap.SugaredLogger
@@ -71,7 +74,7 @@ func (za ZapAdapter) Error(msg string, args ...any) {
 	za.sl.Errorw(msg, args...)
 }
 
-func (za ZapAdapter) GetNamed(name string) ZapAdapter {
+func (za ZapAdapter) Named(name string) ctifaces.NameableLogger {
 	return ZapAdapter{
 		sl: za.sl.Named(name),
 	}

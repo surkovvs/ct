@@ -2,6 +2,11 @@ package ctifaces
 
 import "log/slog"
 
+type NameableLogger interface {
+	Logger
+	Named(name string) NameableLogger
+}
+
 type Logger interface {
 	Debug(msg string, args ...any)
 	Info(msg string, args ...any)

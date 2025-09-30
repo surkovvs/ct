@@ -41,7 +41,15 @@ type AppOption func(*App)
 
 func WithLogger(logger ctifaces.Logger) AppOption {
 	return func(a *App) {
-		a.logger = logger
+		nl, ok := logger.(ctifaces.NameableLogger)
+		switch {
+		case ok && a.name != "":
+			a.logger = nl.Named(a.name)
+		case ok:
+			a.logger = nl.Named("ct-app")
+		default:
+			a.logger = logger
+		}
 	}
 }
 
