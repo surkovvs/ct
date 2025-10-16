@@ -13,34 +13,58 @@ import (
 
 const fetchBytes int32 = 64 << 10 // 64 * 1024
 
-func DecodeStub(_, v []byte) ([]byte, error) {
-	return v, nil
-}
-
 type BatchConsumer[T any] struct {
-	Config        *sarama.Config
-	enabled       bool
+	handler       batchHandler[T]
 	addresses     []string
 	groupID       string
-	topic         string
 	consumerGroup sarama.ConsumerGroup
-
-	handler batchHandler[T]
+	Config        *sarama.Config
+	enabled       bool
 }
 
-func (handler batchHandler[T]) Setup(_ sarama.ConsumerGroupSession) error {
+type batchHandler[T any] struct {
+	logger           ctifaces.Logger
+	topic            string
+	batchInterval    time.Duration
+	batchSize        int
+	decodeFunc       DecodeFunc[T]
+	decodeErrHandle  DecodeErrHandle
+	processFunc      ProcessFunc[T]
+	processErrHandle ProcessErrHandle
+	dropOffsets      bool
+}
+
+func (handler batchHandler[T]) Setup(cgs sarama.ConsumerGroupSession) error {
+	handler.logger.Debug("starting new session",
+		"topic", handler.topic,
+		"generation_id", cgs.GenerationID(),
+		"member_id", cgs.MemberID())
+
+	if handler.dropOffsets {
+		partitions, ok := cgs.Claims()[handler.topic]
+		if !ok {
+			return errors.New("")
+		}
+		for _, p := range partitions {
+			cgs.ResetOffset(handler.topic, p, 0, "")
+		}
+
+		handler.logger.Info("offsets dropped",
+			"topic", handler.topic)
+	}
+
 	return nil
 }
 
-func (handler batchHandler[T]) Cleanup(_ sarama.ConsumerGroupSession) error {
+func (_ batchHandler[T]) Cleanup(_ sarama.ConsumerGroupSession) error {
 	return nil
 }
 
-//nolint:gocognit // 26, it's ok
 func (handler batchHandler[T]) ConsumeClaim(session sarama.ConsumerGroupSession,
 	claim sarama.ConsumerGroupClaim,
 ) error {
 	t := time.NewTicker(handler.batchInterval)
+	defer t.Stop()
 	rawBatch := make([]*sarama.ConsumerMessage, 0, handler.batchSize)
 	var msg *sarama.ConsumerMessage
 	var ok bool
@@ -48,12 +72,11 @@ func (handler batchHandler[T]) ConsumeClaim(session sarama.ConsumerGroupSession,
 		select {
 		case msg, ok = <-claim.Messages():
 			if !ok {
-				if handler.logger != nil {
-					handler.logger.Info("claim message channel closed",
-						"topic", claim.Topic(),
-						"ctx_error", session.Context().Err(),
-					)
-				}
+				handler.logger.Info("claim message channel closed",
+					"topic", claim.Topic(),
+					"ctx_error", session.Context().Err(),
+				)
+
 				return nil
 			}
 			rawBatch = append(rawBatch, msg)
@@ -95,7 +118,7 @@ func (handler batchHandler[T]) ConsumeClaim(session sarama.ConsumerGroupSession,
 func (handler *batchHandler[T]) flushBatch(ctx context.Context, rawBatch []*sarama.ConsumerMessage) error {
 	batch := make([]T, 0, len(rawBatch))
 	for _, msg := range rawBatch {
-		decoded, err := handler.decodeFunc(msg.Key, msg.Value)
+		decoded, err := handler.decodeFunc(fromSarama(msg))
 		if err != nil {
 			handledErr := handler.decodeErrHandle(msg, err)
 			if handledErr != nil {
@@ -114,18 +137,8 @@ func (handler *batchHandler[T]) flushBatch(ctx context.Context, rawBatch []*sara
 	return nil
 }
 
-type batchHandler[T any] struct {
-	batchInterval    time.Duration
-	batchSize        int
-	decodeFunc       DecodeFunc[T]
-	decodeErrHandle  DecodeErrHandle
-	processFunc      ProcessFunc[T]
-	processErrHandle ProcessErrHandle
-	logger           ctifaces.Logger
-}
-
 type (
-	DecodeFunc[T any]  func(k, v []byte) (T, error)
+	DecodeFunc[T any]  func(msg Message) (T, error)
 	DecodeErrHandle    func(msg *sarama.ConsumerMessage, err error) error
 	ProcessFunc[T any] func(ctx context.Context, batch []T) error
 	ProcessErrHandle   func(msgs []*sarama.ConsumerMessage, err error) error
@@ -167,8 +180,20 @@ func NewBatchConsumer[T any](params BatchConsumerParameters[T], opts ...CfgOpt) 
 	if !ok {
 		return nil, errors.New("no config for consumer named: " + params.ClientName)
 	}
+
+	dropOffsets := false
+	initialOffset := consCfg.GetInitialOffset()
+	if initialOffset != nil && *initialOffset == -3 {
+		dropOffsets = true
+		initialOffset = nil
+	}
+	tools.SetIfNotNil(&sConfig.Consumer.Offsets.Initial, initialOffset)
 	tools.SetIfNotNil(&sConfig.Consumer.MaxProcessingTime, consCfg.GetMaxProcessingTime())
-	tools.SetIfNotNil(&sConfig.Consumer.Offsets.Initial, consCfg.GetInitialOffset())
+
+	logger := params.Config.GetLogger()
+	if logger == nil {
+		logger = loggerStub{}
+	}
 
 	for _, opt := range opts {
 		opt(sConfig)
@@ -179,15 +204,16 @@ func NewBatchConsumer[T any](params BatchConsumerParameters[T], opts ...CfgOpt) 
 		enabled:   consCfg.ConsumerEnabled(),
 		addresses: clientCfg.GetBrokerAddresses(),
 		groupID:   consCfg.GetGroupID(),
-		topic:     consCfg.GetTopic(),
 		handler: batchHandler[T]{
 			batchInterval:    consCfg.GetBatchInterval(),
 			batchSize:        consCfg.GetBatchSize(),
+			topic:            consCfg.GetTopic(),
 			decodeFunc:       params.DecodeFunc,
 			decodeErrHandle:  params.DecodeErrHandle,
 			processFunc:      params.ProcessFunc,
 			processErrHandle: params.ProcessErrHandle,
-			logger:           params.Config.GetLogger(),
+			logger:           logger,
+			dropOffsets:      dropOffsets,
 		},
 	}, nil
 }
@@ -199,11 +225,10 @@ func (cons *BatchConsumer[T]) Run(ctx context.Context) error {
 		return fmt.Errorf("new consumer group: %w", err)
 	}
 	if !cons.enabled {
-		if cons.handler.logger != nil {
-			cons.handler.logger.Info("consumer_disabled",
-				"topic", cons.topic,
-			)
-		}
+		cons.handler.logger.Info("consumer_disabled",
+			"topic", cons.handler.topic,
+		)
+
 		return nil
 	}
 
@@ -215,13 +240,13 @@ func (cons *BatchConsumer[T]) Run(ctx context.Context) error {
 			cons.handler.logger.Error("consumer_group",
 				"broker_addrs", cons.addresses,
 				"group_id", cons.groupID,
-				"topic", cons.topic,
+				"topic", cons.handler.topic,
 				"error", err,
 			)
 		}
 	}()
 
-	err = cons.consumerGroup.Consume(ctx, []string{cons.topic}, cons.handler)
+	err = cons.consumerGroup.Consume(ctx, []string{cons.handler.topic}, cons.handler)
 	if err != nil {
 		return fmt.Errorf("consumer group consume: %w", err)
 	}
@@ -229,7 +254,7 @@ func (cons *BatchConsumer[T]) Run(ctx context.Context) error {
 }
 
 func (cons *BatchConsumer[T]) setDefaultErrHanldeFunc() {
-	if cons.handler.decodeErrHandle == nil && cons.handler.logger != nil {
+	if cons.handler.decodeErrHandle == nil {
 		cons.handler.decodeErrHandle = func(msg *sarama.ConsumerMessage, err error) error {
 			cons.handler.logger.Error("decode_message",
 				"topic", msg.Topic,
@@ -240,7 +265,7 @@ func (cons *BatchConsumer[T]) setDefaultErrHanldeFunc() {
 			return err
 		}
 	}
-	if cons.handler.processErrHandle == nil && cons.handler.logger != nil {
+	if cons.handler.processErrHandle == nil {
 		cons.handler.processErrHandle = func(msgs []*sarama.ConsumerMessage, err error) error {
 			cons.handler.logger.Error("process_message",
 				"topic", msgs[0].Topic,

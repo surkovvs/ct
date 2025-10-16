@@ -61,3 +61,10 @@ func (sla saramaLogAdapter) Println(v ...interface{}) {
 		"message", fmt.Sprint(v...),
 	)
 }
+
+type loggerStub struct{}
+
+func (loggerStub) Debug(string, ...any) {}
+func (loggerStub) Info(string, ...any)  {}
+func (loggerStub) Warn(string, ...any)  {}
+func (loggerStub) Error(string, ...any) {}

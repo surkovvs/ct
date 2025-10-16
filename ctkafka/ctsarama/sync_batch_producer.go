@@ -30,7 +30,7 @@ type SyncBatchProducer[T any] struct {
 	errChan  chan error
 }
 
-type EncodeFunc[T any] func(obj T) (k, v []byte, err error)
+type EncodeFunc[T any] func(obj T) (msg Message, err error)
 
 type BatchProducerParameters[T any] struct {
 	Config       ctifaces.KafkaConfigurator
@@ -61,6 +61,11 @@ func NewSyncBatchProducer[T any](params BatchProducerParameters[T],
 		return nil, errors.New("no config for producer named: " + params.ProducerName)
 	}
 
+	logger := params.Config.GetLogger()
+	if logger == nil {
+		logger = loggerStub{}
+	}
+
 	for _, opt := range opts {
 		opt(sConfig)
 	}
@@ -71,7 +76,7 @@ func NewSyncBatchProducer[T any](params BatchProducerParameters[T],
 		encodeFunc: params.EncodeFunc,
 		addrs:      clientCfg.GetBrokerAddresses(),
 		Config:     sConfig,
-		logger:     params.Config.GetLogger(),
+		logger:     logger,
 
 		running: make(chan struct{}),
 		closed:  make(chan struct{}),
@@ -95,11 +100,10 @@ func defaultProducerCfgApply() CfgOpt {
 
 func (p *SyncBatchProducer[T]) Run(ctx context.Context) error {
 	if !p.enabled {
-		if p.logger != nil {
-			p.logger.Info("producer_disabled",
-				"topic", p.topic,
-			)
-		}
+		p.logger.Info("producer_disabled",
+			"topic", p.topic,
+		)
+
 		return nil
 	}
 	var err error
@@ -114,7 +118,7 @@ LoopLable:
 	for {
 		select {
 		case <-ctx.Done():
-			close(p.closed)
+			p.Close()
 			close(p.sendChan)
 			break LoopLable
 		case msgs := <-p.sendChan:
@@ -149,15 +153,11 @@ func (p *SyncBatchProducer[T]) Shutdown(_ context.Context) error {
 func (p *SyncBatchProducer[T]) batchEncode(objs []T) ([]*sarama.ProducerMessage, error) {
 	batch := make([]*sarama.ProducerMessage, 0, len(objs))
 	for _, obj := range objs {
-		k, v, err := p.encodeFunc(obj)
+		msg, err := p.encodeFunc(obj)
 		if err != nil {
 			return nil, err
 		}
-		batch = append(batch, &sarama.ProducerMessage{
-			Topic: p.topic,
-			Key:   sarama.ByteEncoder(k),
-			Value: sarama.ByteEncoder(v),
-		})
+		batch = append(batch, msg.toSarama())
 	}
 	return batch, nil
 }
@@ -183,6 +183,16 @@ func (p *SyncBatchProducer[T]) SendBatch(objs []T) error {
 		}
 	}
 
+	return nil
+}
+
+func (p *SyncBatchProducer[T]) Close() error {
+	select {
+	case <-p.closed:
+		return ErrProducerIsClosed
+	default:
+		close(p.closed)
+	}
 	return nil
 }
 

@@ -58,3 +58,15 @@ func WithPartitioner(partitioner sarama.PartitionerConstructor) CfgOpt {
 		c.Producer.Partitioner = partitioner
 	}
 }
+
+func WithProducerInterceptor(itc sarama.ProducerInterceptor) CfgOpt {
+	return func(c *sarama.Config) {
+		c.Producer.Interceptors = append(c.Producer.Interceptors, itc)
+	}
+}
+
+func WithConsumerInterceptor(itc sarama.ConsumerInterceptor) CfgOpt {
+	return func(c *sarama.Config) {
+		c.Consumer.Interceptors = append(c.Consumer.Interceptors, itc)
+	}
+}
