@@ -121,11 +121,14 @@ LoopLable:
 			p.Close()
 			close(p.sendChan)
 			break LoopLable
+		case <-p.closed:
+			close(p.sendChan)
+			break LoopLable
 		case msgs := <-p.sendChan:
 			var errs []error
 			for _, msg := range msgs {
 				if part, offset, err := p.syncProducer.SendMessage(msg); err != nil {
-					errs = append(errs, fmt.Errorf("patrition: %d,offset: %d,desc: %w", part, offset, err))
+					errs = append(errs, fmt.Errorf("topic: %s,patrition: %d,offset: %d,desc: %w", p.topic, part, offset, err))
 				}
 			}
 			if err := errors.Join(errs...); err != nil {
@@ -136,7 +139,7 @@ LoopLable:
 		}
 	}
 
-	if err := ctx.Err(); !errors.Is(err, context.Canceled) {
+	if err := ctx.Err(); err != nil && !errors.Is(err, context.Canceled) {
 		return fmt.Errorf("context error: %w", err)
 	}
 
@@ -157,6 +160,7 @@ func (p *SyncBatchProducer[T]) batchEncode(objs []T) ([]*sarama.ProducerMessage,
 		if err != nil {
 			return nil, err
 		}
+		msg.topic = p.topic
 		batch = append(batch, msg.toSarama())
 	}
 	return batch, nil
