@@ -58,5 +58,5 @@ func (db *Database) GetModuleNamePrefix() string {
 }
 
 func (db *Database) PreidentifyModuleGroup() string {
-	return "background_sync"
+	return "egress"
 }

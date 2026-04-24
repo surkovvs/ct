@@ -13,8 +13,8 @@ import (
 
 var (
 	appName         = "example"
-	initTimeout     = time.Millisecond * 2000
-	shutdownTimeout = time.Millisecond * 2000
+	initTimeout     = time.Millisecond * 1500
+	shutdownTimeout = time.Millisecond * 1500
 )
 
 func main() {
@@ -37,102 +37,113 @@ func main() {
 		ctapp.WithProvidedSigs(os.Interrupt),
 	)
 
-	app.AddBackgroundModule("module_bg_1", modules.NewModuleInitRunSd(modules.ModuleInitRunSdCfg{
-		Name: "mock_bg_1",
+	app.AddNamedEgressModule("module_eg_1", modules.NewModuleInitRunSd(modules.ModuleInitRunSdCfg{
+		Name: "module_eg_1",
 		Init: modules.ElemCfg{
-			TotalDur: time.Millisecond * 750,
+			TotalDur: time.Millisecond * 450,
 			WantFail: false,
 		},
 		Run: modules.ElemCfg{
-			TotalDur: time.Millisecond * 3000,
+			TotalDur: time.Millisecond * 2000,
 			WantFail: false,
 		},
 		Shutdown: modules.ElemCfg{
-			TotalDur: time.Millisecond * 1000,
+			TotalDur: time.Millisecond * 450,
 			WantFail: false,
 		},
 	}))
 
-	app.AddBackgroundModule("module_bg_2", modules.NewModuleInitSd(modules.ModuleInitSdCfg{
-		Name: "mock_bg_2",
+	app.AddNamedEgressModule("module_eg_2", modules.NewModuleInitRunSd(modules.ModuleInitRunSdCfg{
+		Name: "module_eg_2",
 		Init: modules.ElemCfg{
-			TotalDur: time.Millisecond * 750,
+			TotalDur: time.Millisecond * 450,
 			WantFail: false,
-		},
-		Shutdown: modules.ElemCfg{
-			TotalDur: time.Millisecond * 1000,
-			WantFail: false,
-		},
-	}))
-
-	app.AddBackgroundModule("module_bg_3", modules.NewModuleHcInitSd(modules.ModuleHcInitSdCfg{
-		Name: "mock_bg_3",
-		Healthcheck: modules.ElemCfg{
-			TotalDur: time.Millisecond * 750,
-			WantFail: true,
-		},
-		Init: modules.ElemCfg{
-			TotalDur: time.Millisecond * 750,
-			WantFail: false,
-		},
-		Shutdown: modules.ElemCfg{
-			TotalDur: time.Millisecond * 1000,
-			WantFail: false,
-		},
-	}))
-
-	app.AddModuleToGroup("example_group_1", "module_1:1", modules.NewModuleHcInitRun(modules.ModuleHcInitRunCfg{
-		Name: "mock_1:1",
-		Healthcheck: modules.ElemCfg{
-			TotalDur: time.Millisecond * 1500,
-			WantFail: false,
-		},
-		Init: modules.ElemCfg{
-			TotalDur:         time.Millisecond * 500,
-			DelayOnStopByCtx: time.Millisecond * 300,
-			WantFail:         false,
 		},
 		Run: modules.ElemCfg{
-			DelayOnStopByCtx: time.Millisecond * 500,
+			TotalDur: time.Millisecond * 2000,
+			WantFail: false,
+		},
+		Shutdown: modules.ElemCfg{
+			TotalDur: time.Millisecond * 450,
+			WantFail: false,
 		},
 	}))
 
-	app.AddModuleToGroup("example_group_1", "module_1:2", modules.NewModuleInitRunSd(modules.ModuleInitRunSdCfg{
-		Name: "mock_1:2",
+	app.AddNamedIngressModule("module_ing_1", modules.NewModuleInitRunSd(modules.ModuleInitRunSdCfg{
+		Name: "module_ing_1",
 		Init: modules.ElemCfg{
-			TotalDur:         time.Millisecond * 500,
-			DelayOnStopByCtx: time.Millisecond * 300,
-			WantFail:         false,
-		},
-		Shutdown: modules.ElemCfg{
-			TotalDur: time.Millisecond * 1600,
+			TotalDur: time.Millisecond * 450,
 			WantFail: false,
 		},
-		Run: modules.ElemCfg{},
-	}))
-
-	app.AddModuleToGroup("example_group_2", "module_2", modules.NewModuleRunSd(modules.ModuleRunSdCfg{
-		Name: "mock_2",
 		Run: modules.ElemCfg{
-			TotalDur:         time.Millisecond * 4000,
-			DelayOnStopByCtx: time.Millisecond * 1000,
-			WantFail:         false,
+			TotalDur: time.Millisecond * 2000,
+			WantFail: false,
 		},
 		Shutdown: modules.ElemCfg{
-			TotalDur: time.Millisecond * 600,
+			TotalDur: time.Millisecond * 450,
 			WantFail: false,
 		},
 	}))
-
-	app.AddModuleToGroup("example_group_3", "module_3", modules.NewModuleRunSd(modules.ModuleRunSdCfg{
-		Name: "mock_3",
+	app.AddNamedIngressModule("module_ing_2", modules.NewModuleInitRunSd(modules.ModuleInitRunSdCfg{
+		Name: "module_ing_2",
+		Init: modules.ElemCfg{
+			TotalDur: time.Millisecond * 450,
+			WantFail: false,
+		},
 		Run: modules.ElemCfg{
-			TotalDur:         time.Millisecond * 1000,
-			DelayOnStopByCtx: time.Millisecond * 1000,
-			WantFail:         true,
+			TotalDur: time.Millisecond * 2000,
+			WantFail: false,
 		},
 		Shutdown: modules.ElemCfg{
-			TotalDur: time.Millisecond * 600,
+			TotalDur: time.Millisecond * 450,
+			WantFail: false,
+		},
+	}))
+
+	app.AddModuleToGroup("group_1", "module_seq_1:group_1", modules.NewModuleInitRunSd(modules.ModuleInitRunSdCfg{
+		Name: "module_seq_1:group_1",
+		Init: modules.ElemCfg{
+			TotalDur: time.Millisecond * 200,
+			WantFail: false,
+		},
+		Run: modules.ElemCfg{
+			TotalDur: time.Millisecond * 2000,
+			WantFail: false,
+		},
+		Shutdown: modules.ElemCfg{
+			TotalDur: time.Millisecond * 200,
+			WantFail: false,
+		},
+	}))
+
+	app.AddModuleToGroup("group_1", "module_seq_2:group_1", modules.NewModuleInitRunSd(modules.ModuleInitRunSdCfg{
+		Name: "module_seq_2:group_1",
+		Init: modules.ElemCfg{
+			TotalDur: time.Millisecond * 200,
+			WantFail: false,
+		},
+		Run: modules.ElemCfg{
+			TotalDur: time.Millisecond * 2000,
+			WantFail: false,
+		},
+		Shutdown: modules.ElemCfg{
+			TotalDur: time.Millisecond * 200,
+			WantFail: false,
+		},
+	}))
+
+	app.AddModuleToGroup("group_2", "module_seq:group_2", modules.NewModuleInitRunSd(modules.ModuleInitRunSdCfg{
+		Name: "module_seq:group_2",
+		Init: modules.ElemCfg{
+			TotalDur: time.Millisecond * 200,
+			WantFail: false,
+		},
+		Run: modules.ElemCfg{
+			TotalDur: time.Millisecond * 2000,
+			WantFail: false,
+		},
+		Shutdown: modules.ElemCfg{
+			TotalDur: time.Millisecond * 200,
 			WantFail: false,
 		},
 	}))

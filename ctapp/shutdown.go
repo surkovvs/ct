@@ -2,12 +2,9 @@ package ctapp
 
 import (
 	"strings"
-	"sync"
 	"time"
 
 	"github.com/surkovvs/ct/ctapp/component"
-	"github.com/surkovvs/ct/ctapp/vector"
-	"github.com/surkovvs/ct/ctapp/wgchan"
 )
 
 func (a *App) gracefulShutdown() {
@@ -18,24 +15,14 @@ func (a *App) gracefulShutdown() {
 		a.shutdown.ctxCancel()
 	}()
 
-	c := vector.NewConstructor(a.execution.reports)
-	shutdowners := a.storage.GetUnsortedShutdowners()
-	vectors := make([]any, 0, len(shutdowners))
-	wg := sync.WaitGroup{}
-	for _, module := range shutdowners {
-		wg.Add(1)
-		vectors = append(vectors, c.WithReleaseWG(&wg, module.ForseShutdown))
-	}
-	go c.Concurrently(a.shutdown.ctx, vectors...).Exec(a.shutdown.ctx)
-
 	select {
 	case <-a.shutdown.ctx.Done():
 		a.reportUnfinished()
-	case <-a.execution.done:
+	case <-a.execution.execDone:
 		select {
 		case <-a.shutdown.ctx.Done():
 			a.reportUnfinished()
-		case <-wgchan.NewWgChan(&wg):
+		default:
 			a.logger.Info(`graceful shutdown finished`,
 				"application", a.name)
 		}

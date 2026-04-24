@@ -80,5 +80,5 @@ func (_ *Client) GetModuleNamePrefix() string {
 }
 
 func (_ *Client) PreidentifyModuleGroup() string {
-	return "background"
+	return "egress"
 }

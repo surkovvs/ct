@@ -42,7 +42,7 @@ func main() {
 		ctapp.WithProvidedSigs(os.Interrupt),
 	)
 
-	app.AddBackgroundModule("module_bg_1_initRun", modules.NewModuleInitRun(modules.ModuleInitRunCfg{
+	app.AddNamedEgressModule("module_bg_1_initRun", modules.NewModuleInitRun(modules.ModuleInitRunCfg{
 		Name: "mock_bg_1_initRun",
 		Init: modules.ElemCfg{
 			TotalDur: time.Millisecond * 150,
@@ -51,7 +51,7 @@ func main() {
 		Run: modules.ElemCfg{TotalDur: runDuration},
 	}))
 
-	app.AddBackgroundModule("module_bg_2_initSd", modules.NewModuleInitSd(modules.ModuleInitSdCfg{
+	app.AddNamedEgressModule("module_bg_2_initSd", modules.NewModuleInitSd(modules.ModuleInitSdCfg{
 		Name: "mock_bg_2_initSd",
 		Init: modules.ElemCfg{
 			TotalDur: time.Millisecond * 300,
@@ -60,7 +60,7 @@ func main() {
 		Shutdown: modules.ElemCfg{TotalDur: shutdownDuration},
 	}))
 
-	app.AddBackgroundSyncModule("module_bgs_1_initRun", modules.NewModuleInitRun(modules.ModuleInitRunCfg{
+	app.AddNamedIngressModule("module_bgs_1_initRun", modules.NewModuleInitRun(modules.ModuleInitRunCfg{
 		Name: "mock_bgs_1_initRun",
 		Init: modules.ElemCfg{
 			TotalDur: time.Millisecond * 300,
@@ -69,7 +69,7 @@ func main() {
 		Run: modules.ElemCfg{TotalDur: runDuration},
 	}))
 
-	app.AddBackgroundSyncModule("module_bgs_2_initSd", modules.NewModuleInitSd(modules.ModuleInitSdCfg{
+	app.AddNamedIngressModule("module_bgs_2_initSd", modules.NewModuleInitSd(modules.ModuleInitSdCfg{
 		Name: "mock_bgs_2_initSd",
 		Init: modules.ElemCfg{
 			TotalDur: time.Millisecond * 300,

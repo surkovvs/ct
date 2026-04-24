@@ -36,6 +36,10 @@ func (r statusProvider) setInProcess() {
 	r.comp.status.SetStatus(inProcess, r.provided)
 }
 
+func (r statusProvider) tryChangeStatus(prev zorro.Status, next zorro.Status) bool {
+	return r.comp.status.TryChangeStatus(prev, next, r.provided)
+}
+
 func (r statusProvider) setDone() {
 	r.comp.status.SetStatus(done, r.provided)
 }

@@ -1,119 +1,207 @@
 package ctapp
 
 import (
+	"context"
 	"errors"
 	"sync"
 
+	"github.com/surkovvs/ct/ctapp/component"
 	"github.com/surkovvs/ct/ctapp/compstor"
 	"github.com/surkovvs/ct/ctapp/vector"
+	"github.com/surkovvs/ct/ctapp/wgchan"
 )
 
 func (a *App) exec() {
-	// backgroung groups runs before others, all the components in background group runs concurrently
-	wg := sync.WaitGroup{}
-	wg.Add(1)
-	go func() {
-		defer wg.Done()
-		a.processBackground()
-	}()
-	wg.Add(1)
-	go func() {
-		defer wg.Done()
-		a.processBackgroundSync()
-	}()
-	wg.Wait()
-
-	a.processSequentialGroups()
-
-	a.execution.wg.Wait()
-	close(a.execution.done)
-}
-
-func (a *App) processBackground() {
-	bgGroup, err := a.storage.GetGroupByName(BackgroundGroup)
-	if err != nil {
-		if errors.Is(err, compstor.ErrGroupNotFound) {
-			a.logger.Debug(`background group not found`,
-				"application", a.name)
-		} else {
-			a.logger.Error(`unexpected error`,
-				"application", a.name,
-				`group`, bgGroup.GetName(),
-				"error", err)
-		}
-	} else {
-		wg := sync.WaitGroup{}
-		c := vector.NewConstructor(a.execution.reports)
-		var targets []any
-		for _, module := range bgGroup.GetComponents() {
-			wg.Add(1)
-			targets = append(targets,
-				c.Sequentially(a.execution.runCtx,
-					c.WithReleaseWG(&wg, c.Sequentially(a.execution.initCtx, module.Init)),
-					c.Sequentially(a.execution.runCtx, module.Run),
-					c.Sequentially(a.shutdown.ctx, module.Shutdown),
-				),
-			)
-		}
-		go c.Concurrently(a.execution.runCtx, targets...).Exec(a.execution.runCtx)
-
-		wg.Wait()
+	var vecs []any
+	if vec := a.buildEgrInitVector(a.execution.initCtx); vec != nil {
+		vecs = append(vecs, vec)
 	}
-}
-
-func (a *App) processBackgroundSync() {
-	bgsGroup, err := a.storage.GetGroupByName(BackgroundSyncGroup)
-	if err != nil {
-		if errors.Is(err, compstor.ErrGroupNotFound) {
-			a.logger.Debug(`background sync group not found`,
-				"application", a.name)
-		} else {
-			a.logger.Error(`unexpected error`,
-				"application", a.name,
-				`group`, bgsGroup.GetName(),
-				"error", err)
-		}
-	} else {
-		wg := sync.WaitGroup{}
-		c := vector.NewConstructor(a.execution.reports)
-		var inits, rsd []any
-		for _, module := range bgsGroup.GetComponents() {
-			wg.Add(1)
-			inits = append(inits, c.WithReleaseWG(&wg, c.Sequentially(a.execution.initCtx, module.Init)))
-			rsd = append(rsd,
-				c.Sequentially(a.execution.runCtx, module.Run,
-					c.Sequentially(a.shutdown.ctx, module.Shutdown),
-				),
-			)
-		}
-		go c.Sequentially(a.execution.runCtx,
-			c.Concurrently(a.execution.runCtx, inits...),
-			c.Concurrently(a.execution.runCtx, rsd...),
-		).Exec(a.execution.runCtx)
-
-		wg.Wait()
+	if vec := a.buildSeqInitVec(a.execution.initCtx); vec != nil {
+		vecs = append(vecs, vec)
 	}
-}
+	if vec := a.buildIngrInitVec(a.execution.initCtx); vec != nil {
+		vecs = append(vecs, vec)
+	}
+	vec, wg := a.buildRunVec(a.execution.runCtx)
+	vecs = append(vecs, vec)
+	go func() {
+		<-wgchan.NewWgChan(wg)
+		close(a.execution.runDone)
+	}()
 
-func (a *App) processSequentialGroups() {
+	if vec := a.buildIngrSdVec(a.shutdown.ctx); vec != nil {
+		vecs = append(vecs, vec)
+	}
+	if vec := a.buildSeqSdVec(a.shutdown.ctx); vec != nil {
+		vecs = append(vecs, vec)
+	}
+	if vec := a.buildEgrSdVec(a.shutdown.ctx); vec != nil {
+		vecs = append(vecs, vec)
+	}
+
 	c := vector.NewConstructor(a.execution.reports)
+	runWithoutCancel := context.WithoutCancel(a.execution.runCtx)
+	c.Sequentially(runWithoutCancel, vecs...).Exec(runWithoutCancel)
+	close(a.execution.execDone)
+}
+
+// need to be checked on nil result
+func (a *App) buildEgrInitVector(vecCtx context.Context) *vector.Vector[component.Report] {
+	egrGroup, err := a.storage.GetGroupByName(EgressGroup)
+	if err != nil {
+		if errors.Is(err, compstor.ErrGroupNotFound) {
+			a.logger.Debug(`egress group not found`,
+				"application", a.name)
+			return nil
+		} else {
+			a.logger.Error(`unexpected error`,
+				"application", a.name,
+				`group`, egrGroup.GetName(),
+				"error", err)
+		}
+	}
+	var egrInits []any
+	for _, module := range egrGroup.GetComponents() {
+		egrInits = append(egrInits, module.Init)
+	}
+	c := vector.NewConstructor(a.execution.reports)
+	return c.Concurrently(vecCtx, egrInits...)
+}
+
+// need to be checked on nil result
+func (a *App) buildSeqInitVec(vecCtx context.Context) *vector.Vector[component.Report] {
 	groupList := a.storage.GetOrderedGroupList()
-	vectors := make([]any, 0, len(groupList))
+	seqGroupVecs := make([]any, 0, len(groupList))
+	c := vector.NewConstructor(a.execution.reports)
 	for _, group := range groupList {
-		if group.GetName() == BackgroundGroup || group.GetName() == BackgroundSyncGroup {
+		if group.GetName() == IngressGroup || group.GetName() == EgressGroup {
 			continue
 		}
-		var inits, runs, sds []any
+		var seqGroupInits []any
 		for _, module := range group.GetComponents() {
-			inits = append(inits, module.Init)
-			runs = append(runs, module.Run)
-			sds = append(sds, module.Shutdown)
+			seqGroupInits = append(seqGroupInits, module.Init)
 		}
-		vectors = append(vectors, c.Sequentially(a.execution.runCtx,
-			c.Sequentially(a.execution.initCtx, inits...),
-			c.Sequentially(a.execution.runCtx, runs...),
-			c.Sequentially(a.shutdown.ctx, sds...),
-		))
+		seqGroupVecs = append(seqGroupVecs, c.Sequentially(vecCtx, seqGroupInits...))
 	}
-	go c.Concurrently(a.execution.runCtx, vectors...).Exec(a.execution.runCtx)
+	if len(seqGroupVecs) == 0 {
+		return nil
+	}
+	return c.Concurrently(vecCtx, seqGroupVecs...)
+}
+
+// need to be checked on nil result
+func (a *App) buildIngrInitVec(vecCtx context.Context) *vector.Vector[component.Report] {
+	ingrGroup, err := a.storage.GetGroupByName(IngressGroup)
+	if err != nil {
+		if errors.Is(err, compstor.ErrGroupNotFound) {
+			a.logger.Debug(`egress group not found`,
+				"application", a.name)
+			return nil
+		} else {
+			a.logger.Error(`unexpected error`,
+				"application", a.name,
+				`group`, ingrGroup.GetName(),
+				"error", err)
+		}
+	}
+	var ingrInits []any
+	for _, module := range ingrGroup.GetComponents() {
+		ingrInits = append(ingrInits, module.Init)
+	}
+	c := vector.NewConstructor(a.execution.reports)
+	return c.Concurrently(vecCtx, ingrInits...)
+}
+
+// at least 1 module must be added
+func (a *App) buildRunVec(vecCtx context.Context) (*vector.Vector[component.Report], *sync.WaitGroup) {
+	groupList := a.storage.GetOrderedGroupList()
+	groupVecs := make([]any, 0, len(groupList))
+	c := vector.NewConstructor(a.execution.reports)
+	for _, group := range groupList {
+		var groupVec *vector.Vector[component.Report]
+		if group.GetName() == IngressGroup || group.GetName() == EgressGroup {
+			var concGroupRuns []any
+			for _, module := range group.GetComponents() {
+				concGroupRuns = append(concGroupRuns, module.Run)
+			}
+			groupVec = c.Concurrently(vecCtx, concGroupRuns...)
+		} else {
+			var seqGroupRuns []any
+			for _, module := range group.GetComponents() {
+				seqGroupRuns = append(seqGroupRuns, module.Run)
+			}
+			groupVec = c.Sequentially(vecCtx, seqGroupRuns...)
+		}
+		groupVecs = append(groupVecs, groupVec)
+	}
+	wg := sync.WaitGroup{}
+	wg.Add(1)
+	return c.WithReleaseWG(&wg, c.Concurrently(vecCtx, groupVecs...)), &wg
+}
+
+// need to be checked on nil result
+func (a *App) buildIngrSdVec(vecCtx context.Context) *vector.Vector[component.Report] {
+	ingrGroup, err := a.storage.GetGroupByName(IngressGroup)
+	if err != nil {
+		if errors.Is(err, compstor.ErrGroupNotFound) {
+			a.logger.Debug(`egress group not found`,
+				"application", a.name)
+			return nil
+		} else {
+			a.logger.Error(`unexpected error`,
+				"application", a.name,
+				`group`, ingrGroup.GetName(),
+				"error", err)
+		}
+	}
+	var ingrShutdowns []any
+	for _, module := range ingrGroup.GetComponents() {
+		ingrShutdowns = append(ingrShutdowns, module.Shutdown)
+	}
+	c := vector.NewConstructor(a.execution.reports)
+	return c.Concurrently(vecCtx, ingrShutdowns...)
+}
+
+// need to be checked on nil result
+func (a *App) buildSeqSdVec(vecCtx context.Context) *vector.Vector[component.Report] {
+	groupList := a.storage.GetOrderedGroupList()
+	seqGroupVecs := make([]any, 0, len(groupList))
+	c := vector.NewConstructor(a.execution.reports)
+	for _, group := range groupList {
+		if group.GetName() == IngressGroup || group.GetName() == EgressGroup {
+			continue
+		}
+		var seqGroupShutdowns []any
+		for _, module := range group.GetComponents() {
+			seqGroupShutdowns = append(seqGroupShutdowns, module.Shutdown)
+		}
+		seqGroupVecs = append(seqGroupVecs, c.Sequentially(vecCtx, seqGroupShutdowns...))
+	}
+	if len(seqGroupVecs) == 0 {
+		return nil
+	}
+	return c.Concurrently(vecCtx, seqGroupVecs...)
+}
+
+// need to be checked on nil result
+func (a *App) buildEgrSdVec(vecCtx context.Context) *vector.Vector[component.Report] {
+	egrGroup, err := a.storage.GetGroupByName(EgressGroup)
+	if err != nil {
+		if errors.Is(err, compstor.ErrGroupNotFound) {
+			a.logger.Debug(`egress group not found`,
+				"application", a.name)
+			return nil
+		} else {
+			a.logger.Error(`unexpected error`,
+				"application", a.name,
+				`group`, egrGroup.GetName(),
+				"error", err)
+		}
+	}
+	var egrShutdowns []any
+	for _, module := range egrGroup.GetComponents() {
+		egrShutdowns = append(egrShutdowns, module.Shutdown)
+	}
+	c := vector.NewConstructor(a.execution.reports)
+	return c.Concurrently(vecCtx, egrShutdowns...)
 }

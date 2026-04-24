@@ -40,12 +40,6 @@ func (v *Vector[T]) Exec(ctx context.Context) {
 		}
 	}
 
-	// высвобождаем блокировку, если можем
-	if v.done != nil {
-		v.done.Done()
-		v.done = nil
-	}
-
 	// конкурентно запускаем векторы, и ждем исполнения
 	if len(v.conc) != 0 {
 		wg := sync.WaitGroup{}
@@ -61,6 +55,12 @@ func (v *Vector[T]) Exec(ctx context.Context) {
 		case <-ctx.Done():
 		case <-wgchan.NewWgChan(&wg):
 		}
+	}
+
+	// высвобождаем блокировку, если можем
+	if v.done != nil {
+		v.done.Done()
+		v.done = nil
 	}
 
 	// запускаем следующего

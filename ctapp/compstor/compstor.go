@@ -22,12 +22,6 @@ type CompsStorage struct {
 	groupCounter groupNum
 }
 
-type SequentialGroup struct {
-	name  string
-	num   groupNum
-	comps []component.Comp
-}
-
 func NewCompsStorage() CompsStorage {
 	return CompsStorage{
 		mu:     &sync.Mutex{},
@@ -136,12 +130,4 @@ func (cs *CompsStorage) GetConditions() []component.Condition {
 		}
 	}
 	return conds
-}
-
-func (sg SequentialGroup) GetName() string {
-	return sg.name
-}
-
-func (sg SequentialGroup) GetComponents() []component.Comp {
-	return sg.comps
 }

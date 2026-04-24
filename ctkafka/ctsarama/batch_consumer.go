@@ -208,3 +208,7 @@ func (cons *BatchConsumer[T]) Shutdown(_ context.Context) error {
 func (cons *BatchConsumer[T]) GetModuleNamePrefix() string {
 	return "kafka_batch_consumer"
 }
+
+func (_ *BatchConsumer[T]) PreidentifyModuleGroup() string {
+	return "ingress"
+}

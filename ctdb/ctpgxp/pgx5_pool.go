@@ -70,5 +70,5 @@ func (pool *Pool) GetModuleNamePrefix() string {
 }
 
 func (pool *Pool) PreidentifyModuleGroup() string {
-	return "background_sync"
+	return "egress"
 }

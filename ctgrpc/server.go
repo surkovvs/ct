@@ -76,6 +76,10 @@ func (s Server) Shutdown(ctx context.Context) error {
 	}
 }
 
-func (s Server) GetModuleNamePrefix() string {
+func (_ Server) GetModuleNamePrefix() string {
 	return "grpc_server"
+}
+
+func (_ Server) PreidentifyModuleGroup() string {
+	return "ingress"
 }

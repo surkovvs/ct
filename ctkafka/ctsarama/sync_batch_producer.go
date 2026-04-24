@@ -200,10 +200,10 @@ func (p *SyncBatchProducer[T]) Close() error {
 	return nil
 }
 
-func (p *SyncBatchProducer[T]) GetModuleNamePrefix() string {
+func (_ *SyncBatchProducer[T]) GetModuleNamePrefix() string {
 	return "kafka_batch_producer"
 }
 
-func (p *SyncBatchProducer[T]) PreidentifyModuleGroup() string {
-	return "background"
+func (_ *SyncBatchProducer[T]) PreidentifyModuleGroup() string {
+	return "egress"
 }

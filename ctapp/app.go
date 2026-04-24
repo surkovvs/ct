@@ -2,10 +2,8 @@ package ctapp
 
 import (
 	"context"
-	"errors"
 	"os"
 	"os/signal"
-	"sync"
 	"syscall"
 	"time"
 
@@ -18,24 +16,25 @@ import (
 var (
 	DefaultProvidedSigs    = []os.Signal{syscall.SIGTERM, syscall.SIGINT}
 	DefaultShutdownTimeout = time.Second * 3
-	BackgroundGroup        = `background`      // Concurrent running group.
-	BackgroundSyncGroup    = `background_sync` // Group, where initialization of modules is synced.
+
+	IngressGroup = `ingress`
+	EgressGroup  = `egress`
 )
 
 type (
 	execution struct {
-		wg            *sync.WaitGroup
-		done          chan struct{}
+		runDone       chan struct{} // reports, jobs running are finished (excluding shutdowns)
+		execDone      chan struct{} // reports, that all the jobs are finished (including shutdowns)
 		reports       chan component.Report
-		initCtx       context.Context
-		runCtx        context.Context
+		initCtx       context.Context // based on runCtx, separated for init timeout
+		runCtx        context.Context // main context in app
 		initRunCancel context.CancelFunc
 		initTimeout   *time.Duration
-		tolerantMode  bool
+		tolerantMode  bool // forced switch in case of interrupt
 	}
 	shutdown struct {
 		ctx          context.Context
-		ctxCancel    context.CancelFunc
+		ctxCancel    context.CancelFunc // cancelation, based on sd timeout, processed in gracefulShutdown
 		shutdownDone chan struct{}
 		sigs         []os.Signal
 		timeout      *time.Duration
@@ -54,8 +53,8 @@ func New(opts ...AppOption) *App {
 	sdCtx, sdCancel := context.WithCancel(context.Background())
 	a := &App{
 		execution: execution{
-			wg:            &sync.WaitGroup{},
-			done:          make(chan struct{}),
+			runDone:       make(chan struct{}),
+			execDone:      make(chan struct{}),
 			reports:       make(chan component.Report),
 			initCtx:       nil,
 			runCtx:        nil,
@@ -81,22 +80,14 @@ func New(opts ...AppOption) *App {
 	}
 	a.defaultSettingsCheckAndApply()
 
-	if err := a.storage.AddGroup(BackgroundGroup); err != nil &&
-		!errors.Is(err, compstor.ErrGroupAlreadyRegistered) {
-		a.logger.Error(`group addition`,
-			"application", a.name,
-			`group`, BackgroundGroup,
-			`error`, err)
-		os.Exit(1)
-	}
-
 	return a
 }
 
 func (a *App) accompaniment() {
 	syscallC := make(chan os.Signal, 1)
 	signal.Notify(syscallC, a.shutdown.sigs...)
-	execDone := a.execution.done
+	execDone := a.execution.execDone
+	runDone := a.execution.runDone
 CycleLable:
 	for {
 		select {
@@ -112,7 +103,7 @@ CycleLable:
 					"application", a.name,
 					`error`, rep.String())
 				if !a.execution.tolerantMode {
-					execDone = nil
+					runDone = nil
 					signal.Stop(syscallC)
 
 					a.logger.Debug(`execution failed graceful shutdown started`,
@@ -120,21 +111,21 @@ CycleLable:
 
 					a.execution.initRunCancel()
 					go a.gracefulShutdown()
-
 					a.execution.tolerantMode = true
 				}
 			}
-		case <-execDone:
-			execDone = nil
+		case <-runDone:
+			runDone = nil
 			signal.Stop(syscallC)
 
-			a.logger.Debug(`execution finished graceful shutdown started`,
+			a.logger.Debug(`all runs are finished, graceful shutdown started`,
 				"application", a.name)
 
 			a.execution.initRunCancel()
 			go a.gracefulShutdown()
+			a.execution.tolerantMode = true
 		case sig := <-syscallC:
-			execDone = nil
+			runDone = nil
 			signal.Stop(syscallC)
 
 			a.logger.Info(`graceful shutdown started by syscall`,
@@ -143,8 +134,13 @@ CycleLable:
 
 			a.execution.initRunCancel()
 			go a.gracefulShutdown()
+			a.execution.tolerantMode = true
 		case <-a.shutdown.shutdownDone:
 			break CycleLable
+		case <-execDone:
+			execDone = nil
+			a.logger.Debug(`execution finished`,
+				"application", a.name)
 		}
 	}
 }

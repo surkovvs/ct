@@ -4,10 +4,8 @@ package ctapp
 import (
 	"context"
 	"reflect"
-	"strconv"
 
 	"github.com/surkovvs/ct/ctapp/component"
-	"github.com/surkovvs/ct/ctifaces"
 )
 
 func (a *App) Start(ctx context.Context) {
@@ -30,14 +28,13 @@ func (a *App) AddModuleToGroup(groupName, moduleName string, module any) {
 		GroupName: groupName,
 		CompName:  moduleName,
 		Component: module,
-		ExecWg:    a.execution.wg,
 	})
 	if !comp.IsValid() {
 		a.logger.Error(`module addition`,
 			"application", a.name,
 			`group`, groupName,
 			`module`, moduleName,
-			`unapplyed`, reflect.ValueOf(module).Type().Name(),
+			`unapplyed`, extractTypeName(module),
 			`error`, "module does not implement any of valid methods")
 		return
 	}
@@ -51,42 +48,30 @@ func (a *App) AddModuleToGroup(groupName, moduleName string, module any) {
 	}
 }
 
-func (a *App) AddModule(moduleName string, module any) {
-	groupName := nameficator.getNextGroupName()
-	a.AddModuleToGroup(groupName, moduleName, module)
+func (a *App) AddNamedModule(moduleName string, module any) {
+	a.AddModuleToGroup(nameficator.genGroupName(module), moduleName, module)
 }
 
-func (a *App) AddBackgroundModule(moduleName string, module any) {
-	a.AddModuleToGroup(BackgroundGroup, moduleName, module)
+func (a *App) AddNamedIngressModule(moduleName string, module any) {
+	a.AddModuleToGroup(IngressGroup, moduleName, module)
 }
 
-func (a *App) AddBackgroundSyncModule(moduleName string, module any) {
-	a.AddModuleToGroup(BackgroundSyncGroup, moduleName, module)
+func (a *App) AddNamedEgressModule(moduleName string, module any) {
+	a.AddModuleToGroup(EgressGroup, moduleName, module)
 }
 
-func (a *App) AddUnnamedModule(module any) {
-	var groupName, modulePrefix string
-
-	if gi, ok := module.(ctifaces.GroupIdetifer); ok {
-		groupName = gi.PreidentifyModuleGroup()
-	} else {
-		groupName = nameficator.getNextGroupName()
-	}
-
-	if np, ok := module.(ctifaces.NamePrefixer); ok {
-		modulePrefix = np.GetModuleNamePrefix()
-	} else {
-		modulePrefix = reflect.ValueOf(module).Type().Name()
-	}
-	moduleName := modulePrefix + "_" + strconv.Itoa(nameficator.getNextModuleNum())
-
-	a.AddModuleToGroup(groupName, moduleName, module)
+func (a *App) AddModule(module any) {
+	a.AddModuleToGroup(
+		nameficator.genGroupName(module),
+		nameficator.genModuleName(module),
+		module,
+	)
 }
 
-func (a *App) AddUnnamedBackgroundModule(module any) {
-	a.AddModuleToGroup(BackgroundGroup, reflect.ValueOf(module).Type().Name(), module)
+func (a *App) AddIngressModule(module any) {
+	a.AddModuleToGroup(IngressGroup, nameficator.genModuleName(module), module)
 }
 
-func (a *App) AddUnnamedBackgroundSyncModule(module any) {
-	a.AddModuleToGroup(BackgroundSyncGroup, reflect.ValueOf(module).Type().Name(), module)
+func (a *App) AddEgressModule(module any) {
+	a.AddModuleToGroup(EgressGroup, nameficator.genModuleName(module), module)
 }

@@ -59,6 +59,10 @@ func (s Server) Shutdown(ctx context.Context) error {
 	return nil
 }
 
-func (s Server) GetModuleNamePrefix() string {
+func (_ Server) GetModuleNamePrefix() string {
 	return "http_server"
+}
+
+func (_ Server) PreidentifyModuleGroup() string {
+	return "ingress"
 }
