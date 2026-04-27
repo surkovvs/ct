@@ -30,56 +30,41 @@ func (a *App) gracefulShutdown() {
 }
 
 func (a *App) reportUnfinished() {
-	ufInit := make(map[string][]string)
-	ufRun := make(map[string][]string)
-	ufShutdown := make(map[string][]string)
-	ufHealthcheck := make(map[string][]string)
+	statusesByGroup := make(map[string]map[string][]component.StageStatus)
 
 	for _, cond := range a.storage.GetConditions() {
-		if cond.Init == component.InProcessString {
-			ufInit[cond.Group] = append(ufInit[cond.Group], cond.Name)
-		}
-		if cond.Run == component.InProcessString {
-			ufRun[cond.Group] = append(ufRun[cond.Group], cond.Name)
-		}
-		if cond.Shutdown == component.InProcessString {
-			ufShutdown[cond.Group] = append(ufShutdown[cond.Group], cond.Name)
-		}
-		if cond.Healthcheck == component.InProcessString {
-			ufHealthcheck[cond.Group] = append(ufHealthcheck[cond.Group], cond.Name)
+		unfinishedStages := cond.GetUnfinishedStages()
+		if len(unfinishedStages) > 0 {
+			if statusesByGroup[cond.Group] == nil {
+				statusesByGroup[cond.Group] = map[string][]component.StageStatus{
+					cond.Name: unfinishedStages,
+				}
+			} else {
+				statusesByGroup[cond.Group][cond.Name] = unfinishedStages
+			}
 		}
 	}
 
-	var args []any
-	if len(ufInit) > 0 {
-		args = append(args, "initialization", modulesByGroupsToString(ufInit))
-	}
-	if len(ufRun) > 0 {
-		args = append(args, "running", modulesByGroupsToString(ufRun))
-	}
-	if len(ufShutdown) > 0 {
-		args = append(args, "shutdown", modulesByGroupsToString(ufShutdown))
-	}
-	if len(ufHealthcheck) > 0 {
-		args = append(args, "healthcheck", modulesByGroupsToString(ufHealthcheck))
+	report := strings.Builder{}
+	for group, statusesByModule := range statusesByGroup {
+		report.WriteString("group '" + group + "': ")
+		for module, statuses := range statusesByModule {
+			report.WriteString("module '" + module + "': ")
+			strStages := make([]string, 0, len(statuses))
+			for _, status := range statuses {
+				strStages = append(strStages, "stage '"+string(status.Stage)+"': "+string(status.Status))
+			}
+			report.WriteString(strings.Join(strStages, ", ") + "; ")
+		}
 	}
 
-	if len(args) > 0 {
-		args = append([]any{"application", a.name}, args...)
+	if report.Len() > 0 {
 		a.logger.Error(`graceful shutdown timeout exeeded, got unfinished modules`,
-			args...,
+			"application", a.name,
+			"unfinished stages", report.String(),
 		)
 	} else {
 		a.logger.Error(`graceful shutdown timeout exeeded`,
 			"application", a.name)
 	}
-}
-
-func modulesByGroupsToString(m map[string][]string) string {
-	byGroups := make([]string, 0, len(m))
-	for group, modules := range m {
-		byGroups = append(byGroups, "group '"+group+"': "+strings.Join(modules, ", "))
-	}
-
-	return strings.Join(byGroups, ";")
 }

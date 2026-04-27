@@ -2,6 +2,11 @@ package component
 
 import "github.com/surkovvs/ct/ctapp/zorro"
 
+type (
+	Status string
+	Stage  string
+)
+
 const (
 	ready     zorro.Status = 4369  // 0001000100010001
 	inProcess zorro.Status = 8738  // 0010001000100010
@@ -13,18 +18,25 @@ const (
 	shutdownMask    zorro.Mask = 3840  // 0000111100000000
 	healthcheckMask zorro.Mask = 61440 // 1111000000000000
 
-	ReadyString     = "ready"
-	InProcessString = "in_process"
-	DoneString      = "done"
-	FailedString    = "failed"
+	StageInit        Stage = "init"
+	StageRun         Stage = "run"
+	StageShutdown    Stage = "shutdown"
+	StageHealthcheck Stage = "healthcheck"
+
+	StatusUndefined Status = "undefined"
+	StatusReady     Status = "ready"
+	StatusInProcess Status = "in_process"
+	StatusDone      Status = "done"
+	StatusFailed    Status = "failed"
 )
 
 //nolint:gochecknoglobals // skip
-var namedStatuses = map[uint64]string{
-	1: ReadyString,
-	2: InProcessString,
-	4: DoneString,
-	8: FailedString,
+var namedStatuses = map[uint64]Status{
+	0: StatusUndefined,
+	1: StatusReady,
+	2: StatusInProcess,
+	4: StatusDone,
+	8: StatusFailed,
 }
 
 type statusProvider struct {
@@ -64,7 +76,7 @@ func (r statusProvider) isFailed() bool {
 	return r.comp.status.GetStatus().CompareMasked(failed, r.provided)
 }
 
-func (r statusProvider) namedStatus() string {
+func (r statusProvider) namedStatus() Status {
 	bald := zorro.Status(r.comp.status.GetStatus().Querying(r.provided))
 	s, ok := namedStatuses[bald.ShiftTrailingZeros(r.provided)]
 	if !ok {

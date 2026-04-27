@@ -23,7 +23,7 @@ func main() {
 	app := ctapp.New(
 		ctapp.WithConfig(ctapp.Config{
 			Silient:         false,
-			TolerantMode:    true,
+			TolerantMode:    false,
 			Name:            &appName,
 			InitTimeout:     &initTimeout,
 			ShutdownTimeout: &shutdownTimeout,
