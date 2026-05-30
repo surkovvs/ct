@@ -67,7 +67,9 @@ func (pool *Pool) Init(ctx context.Context) error {
 		return fmt.Errorf("pgx pool ping: %w", err)
 	}
 	for _, ps := range pool.setters {
-		ps.SetupPool(pool)
+		if err := ps.SetupPool(pool); err != nil {
+			return fmt.Errorf("setup pool: %w", err)
+		}
 	}
 	pool.setters = nil
 	return nil
