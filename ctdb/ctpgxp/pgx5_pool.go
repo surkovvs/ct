@@ -9,9 +9,14 @@ import (
 	"github.com/surkovvs/ct/internal/tools"
 )
 
+type PoolSetter interface {
+	SetupPool(*Pool) error
+}
+
 type Pool struct {
-	Cfg  *pgxpool.Config
-	pgxp *pgxpool.Pool
+	Cfg     *pgxpool.Config
+	pgxp    *pgxpool.Pool
+	setters []PoolSetter
 }
 
 func New(cfg ctifaces.SQLConfigurator) (*Pool, error) {
@@ -47,6 +52,10 @@ func (pool *Pool) GetPool() *pgxpool.Pool {
 	return pool.pgxp
 }
 
+func (pool *Pool) RegisterPoolSetter(ps PoolSetter) {
+	pool.setters = append(pool.setters, ps)
+}
+
 func (pool *Pool) Init(ctx context.Context) error {
 	var err error
 	pool.pgxp, err = pgxpool.NewWithConfig(ctx, pool.Cfg)
@@ -57,6 +66,10 @@ func (pool *Pool) Init(ctx context.Context) error {
 	if err != nil {
 		return fmt.Errorf("pgx pool ping: %w", err)
 	}
+	for _, ps := range pool.setters {
+		ps.SetupPool(pool)
+	}
+	pool.setters = nil
 	return nil
 }
 
